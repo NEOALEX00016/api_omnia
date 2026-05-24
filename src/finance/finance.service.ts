@@ -139,9 +139,9 @@ export class FinanceService {
        FROM omnia.recurring_templates
        rt
        LEFT JOIN omnia.accounts acc ON acc.id = rt.account_id
-       WHERE user_id = $1
-         AND deleted_at IS NULL
-         AND execution_day IS NOT NULL`,
+       WHERE rt.user_id = $1
+         AND rt.deleted_at IS NULL
+         AND rt.execution_day IS NOT NULL`,
       [userId],
     );
 
