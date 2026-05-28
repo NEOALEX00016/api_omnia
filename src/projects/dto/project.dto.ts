@@ -30,6 +30,16 @@ export class UpdateProjectDto {
   @IsOptional()
   name?: string;
 
+  @ApiProperty({ enum: ['EMPLOYMENT', 'BUSINESS', 'PERSONAL'], required: false })
+  @IsEnum(['EMPLOYMENT', 'BUSINESS', 'PERSONAL'])
+  @IsOptional()
+  context?: ProjectContext;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  categoryId?: string;
+
   @ApiProperty()
   @IsNumber()
   @IsOptional()
