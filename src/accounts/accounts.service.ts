@@ -823,12 +823,10 @@ export class AccountsService {
         await accountRepo.save(loan);
       }
 
-      await ledgerRepo
-        .createQueryBuilder()
-        .update(LedgerTransaction)
-        .set({ reversedAt: reversalDate })
-        .where('payment_group_id = :groupId', { groupId })
-        .execute();
+      await this.dataSource.query(
+        `UPDATE omnia.ledger_transactions SET reversed_at = NOW() WHERE payment_group_id = $1`,
+        [groupId],
+      );
 
       return loan;
     });
