@@ -988,9 +988,20 @@ export class AccountsService {
     const termMonths = this.resolveLoanTermMonths(loan);
     const selectedMethod = this.resolveAmortizationMethod(loan, method);
 
-    // Query ALL payment history (including reversed) to assign correct payment numbers
-    const allPayments = await this.ledgerRepo.find({
+    // Get ALL income entries (including reversed) just to compute payment numbers
+    const allIncomeEntries = await this.ledgerRepo.find({
       where: { accountId: loanId, type: 'INCOME' } as any,
+      order: { date: 'ASC' },
+    });
+    const paymentNumberMap = new Map<string, number>();
+    let counter = 1;
+    for (const e of allIncomeEntries) {
+      paymentNumberMap.set(e.id, counter++);
+    }
+
+    // Query only NON-REVERSED payment history (original logic)
+    const payments = await this.ledgerRepo.find({
+      where: { accountId: loanId, type: 'INCOME', reversedAt: null } as any,
       order: { date: 'ASC' },
     });
     const expensePayments = await this.ledgerRepo.find({
@@ -999,22 +1010,15 @@ export class AccountsService {
       order: { date: 'ASC' },
     });
     const toDateKey = (date: any) => date instanceof Date ? date.toISOString().substring(0, 10) : String(date ?? '');
-
-    // Assign paymentNumber sequentially across ALL entries, then filter reversed
     const paymentEntries: Array<{
       paymentNumber: number;
       date: Date;
       amount: number;
       description: string;
-      paidAmount: number;
-      paymentGroupId: string | null;
-      reversedAt: Date | null;
-      sourceAccountName: string | null;
-    }> = [];
-    let counter = 0;
-    for (const p of allPayments) {
-      counter++;
-      if (p.reversedAt) continue;
+      paidAmount?: number;
+      paymentGroupId?: string | null;
+      sourceAccountName?: string | null;
+    }> = payments.map((p) => {
       const description = p.description ?? '';
       const fromDescription = (() => {
         const match = description.match(/desde\s+(.+)$/);
@@ -1023,6 +1027,12 @@ export class AccountsService {
       const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
       const paymentDate = toDateKey(p.date);
       const amount = Number(p.amount);
+      const pairedExpense = expensePayments.find((e) => (
+        e.accountId !== loanId &&
+        toDateKey(e.date) === paymentDate &&
+        Math.abs(Number(e.amount) - amount) < 0.01 &&
+        ((e.description ?? '').trim() === baseDescription || (e.description ?? '').trim() === description.trim())
+      ));
       const actualPaidAmount = expensePayments
         .filter((e) => {
           if (e.accountId === loanId) return false;
@@ -1032,17 +1042,16 @@ export class AccountsService {
         })
         .reduce((sum, e) => sum + Number(e.amount), 0);
 
-      paymentEntries.push({
-        paymentNumber: counter,
+      return {
+        paymentNumber: paymentNumberMap.get(p.id) ?? payments.indexOf(p) + 1,
         date: p.date,
         amount,
         description,
         paidAmount: actualPaidAmount > 0 ? actualPaidAmount : amount,
         paymentGroupId: p.paymentGroupId ?? null,
-        reversedAt: p.reversedAt ?? null,
-        sourceAccountName: p.sourceAccountName ?? fromDescription ?? null,
-      });
-    }
+        sourceAccountName: p.sourceAccountName ?? fromDescription ?? pairedExpense?.account?.name ?? null,
+      };
+    });
 
     // Calculate next due date
     const nextDueDate = this.calculateNextDueDate(loan);
