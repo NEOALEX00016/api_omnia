@@ -4,6 +4,7 @@ import { Bank } from './bank.entity';
 
 export type AccountType = 'CASH' | 'BANK' | 'CREDIT_CARD' | 'SAVINGS' | 'INVESTMENT' | 'LOAN';
 export type LoanAmortizationMethod = 'FRENCH' | 'GERMAN' | 'AMERICAN';
+export type LoanInterestPeriod = 'MONTHLY' | 'ANNUAL';
 
 @Entity('accounts')
 export class Account {
@@ -56,6 +57,9 @@ export class Account {
 
   @Column({ name: 'interest_rate', type: 'decimal', precision: 5, scale: 2, nullable: true })
   interestRate: number;
+
+  @Column({ name: 'interest_period', type: 'varchar', length: 10, nullable: true, default: 'ANNUAL' })
+  interestPeriod: LoanInterestPeriod;
 
   @Column({ name: 'monthly_payment', type: 'decimal', precision: 12, scale: 2, nullable: true })
   monthlyPayment: number;

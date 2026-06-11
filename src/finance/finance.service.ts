@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import PDFDocument from 'pdfkit';
@@ -39,6 +39,8 @@ export class FinanceService {
 
   private async ensureLedgerColumns() {
     await this.dataSource.query('ALTER TABLE omnia.ledger_transactions ADD COLUMN IF NOT EXISTS is_auto BOOLEAN DEFAULT FALSE');
+    await this.dataSource.query('ALTER TABLE omnia.ledger_transactions ADD COLUMN IF NOT EXISTS source_account_name VARCHAR(100)');
+    await this.dataSource.query('ALTER TABLE omnia.recurring_templates ADD COLUMN IF NOT EXISTS account_id UUID');
   }
 
   private async ensureTaskDueDateColumn() {
@@ -265,6 +267,17 @@ export class FinanceService {
   // --- RECURRING RECORDS (Ingresos/Gastos Fijos) ---
 
   async createRecurring(userId: string, dto: CreateRecurringDto) {
+    await this.ensureLedgerColumns();
+    if (!dto.accountId) {
+      throw new BadRequestException('Todo movimiento fijo debe estar asociado a una cuenta');
+    }
+    const account = await this.accountsService.findOne(dto.accountId, userId);
+    if (account.type === 'LOAN') {
+      throw new BadRequestException('Los préstamos se gestionan con su flujo de pago');
+    }
+    if (dto.type === 'INCOME' && account.type === 'CREDIT_CARD') {
+      throw new BadRequestException('Las tarjetas no reciben ingresos; se gestionan con pagos');
+    }
     const record = this.recurringRepo.create({
       user_id: userId,
       type: dto.type,
@@ -273,6 +286,7 @@ export class FinanceService {
       context: dto.context,
       category_id: dto.categoryId,
       project_id: dto.projectId,
+      account_id: dto.accountId,
       execution_day: dto.executionDay,
     });
     return this.recurringRepo.save(record);
@@ -309,6 +323,17 @@ export class FinanceService {
 
   async createTransaction(userId: string, dto: CreateTransactionDto) {
     await this.ensureLedgerColumns();
+    if (!dto.accountId) {
+      throw new BadRequestException('Todo movimiento debe estar asociado a una cuenta');
+    }
+    const account = await this.accountsService.findOne(dto.accountId, userId);
+    if (account.type === 'LOAN') {
+      throw new BadRequestException('Los préstamos se gestionan con su flujo de pago');
+    }
+    if (dto.type === 'INCOME' && account.type === 'CREDIT_CARD') {
+      throw new BadRequestException('Las tarjetas no reciben ingresos; se gestionan con pagos');
+    }
+
     const transaction = this.ledgerRepo.create({
       user_id: userId,
       type: dto.type,

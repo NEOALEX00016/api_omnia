@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Request, Qu
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AccountsService } from './accounts.service';
-import { CreateAccountDto, UpdateAccountDto, CreateTransferDto, PayLoanDto } from './dto/account.dto';
+import { CreateAccountDto, UpdateAccountDto, CreateTransferDto, PayLoanDto, ReverseLoanPaymentDto } from './dto/account.dto';
 import { CreateBankDto, UpdateBankDto } from './dto/bank.dto';
 import { CreateTransferRateDto, UpdateTransferRateDto } from './dto/transfer-rate.dto';
 
@@ -61,6 +61,11 @@ export class AccountsController {
   @Post('loans/:id/pay')
   payLoan(@Request() req, @Param('id') id: string, @Body() dto: PayLoanDto) {
     return this.accountsService.payLoan(req.user.id, id, dto);
+  }
+
+  @Post('loans/:id/payments/:groupId/reverse')
+  reverseLoanPayment(@Request() req, @Param('id') id: string, @Param('groupId') groupId: string, @Body() dto: ReverseLoanPaymentDto) {
+    return this.accountsService.reverseLoanPayment(req.user.id, id, groupId, dto);
   }
 
   @Get('loans/:id/amortization')

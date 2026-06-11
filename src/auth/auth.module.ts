@@ -8,6 +8,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/entities/user.entity';
 import { UserConfig } from '../users/entities/user-config.entity';
 import { CategoriesModule } from '../categories/categories.module';
+import { AccountsModule } from '../accounts/accounts.module';
 import { getRequiredEnv } from '../common/env';
 import { MailModule } from '../mail/mail.module';
 
@@ -20,6 +21,7 @@ import { MailModule } from '../mail/mail.module';
     }),
     TypeOrmModule.forFeature([User, UserConfig]),
     CategoriesModule,
+    AccountsModule,
     MailModule,
   ],
   controllers: [AuthController],

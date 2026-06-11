@@ -35,6 +35,11 @@ export class CreateRecurringDto {
   @IsString()
   @IsOptional()
   projectId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  accountId?: string;
 }
 
 export class UpdateRecurringDto {

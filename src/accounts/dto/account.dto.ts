@@ -43,6 +43,11 @@ export class CreateAccountDto {
   @IsOptional()
   interestRate?: number;
 
+  @IsString()
+  @IsOptional()
+  @IsIn(['MONTHLY', 'ANNUAL'])
+  interestPeriod?: string;
+
   @IsNumber()
   @IsOptional()
   monthlyPayment?: number;
@@ -133,6 +138,11 @@ export class UpdateAccountDto {
   @IsNumber()
   @IsOptional()
   interestRate?: number;
+
+  @IsString()
+  @IsOptional()
+  @IsIn(['MONTHLY', 'ANNUAL'])
+  interestPeriod?: string;
 
   @IsNumber()
   @IsOptional()
@@ -233,4 +243,18 @@ export class PayLoanDto {
   @IsString()
   @IsOptional()
   categoryId?: string;
+
+  @IsString()
+  @IsOptional()
+  paymentDate?: string;
+}
+
+export class ReverseLoanPaymentDto {
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
+  @IsString()
+  @IsOptional()
+  reversalDate?: string;
 }

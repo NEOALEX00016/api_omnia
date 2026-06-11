@@ -14,6 +14,7 @@ import { createHash, createPublicKey, createVerify, KeyObject } from 'crypto';
 import { User } from '../users/entities/user.entity';
 import { UserConfig } from '../users/entities/user-config.entity';
 import { CategoriesService } from '../categories/categories.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { MailService } from '../mail/mail.service';
 import {
   AppleLoginDto,
@@ -65,6 +66,7 @@ export class AuthService {
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(UserConfig) private configRepo: Repository<UserConfig>,
     private categoriesService: CategoriesService,
+    private accountsService: AccountsService,
     private jwtService: JwtService,
     private dataSource: DataSource,
     private mailService: MailService,
@@ -116,6 +118,7 @@ export class AuthService {
     const config = this.createDefaultUserConfig(user.id);
     await this.configRepo.save(config);
     await this.categoriesService.seedDefaultCategories(user.id);
+    await this.accountsService.seedBanksForCountry('DO');
     await this.mailService.sendWelcomeVerificationEmail(user.email, user.name, otp);
 
     return {
@@ -373,6 +376,7 @@ export class AuthService {
       const config = this.createDefaultUserConfig(user.id);
       await this.configRepo.save(config);
       await this.categoriesService.seedDefaultCategories(user.id);
+      await this.accountsService.seedBanksForCountry('DO');
     } else if (!user.email_verified) {
       user.email_verified = true;
       user.email_verification_otp_hash = null;

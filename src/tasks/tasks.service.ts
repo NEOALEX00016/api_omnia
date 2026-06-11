@@ -5,12 +5,14 @@ import { Task, } from './entities/task.entity';
 import { CreateTaskDto, UpdateTaskDto, CompleteTaskDto, ReorderTasksDto } from './dto/task.dto';
 import { ProjectsService } from '../projects/projects.service';
 import { Subtask } from './entities/subtask.entity';
+import { Project } from '../projects/entities/project.entity';
 
 @Injectable()
 export class TasksService implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(Task) private taskRepo: Repository<Task>,
     @InjectRepository(Subtask) private subtaskRepo: Repository<Subtask>,
+    @InjectRepository(Project) private projectRepo: Repository<Project>,
     private projectsService: ProjectsService,
     private dataSource: DataSource,
   ) {}
@@ -35,6 +37,13 @@ export class TasksService implements OnApplicationBootstrap {
    */
   async create(userId: string, dto: CreateTaskDto) {
     await this.ensureTaskColumns();
+
+    if (dto.project_id) {
+      const project = await this.projectRepo.findOne({ where: { id: dto.project_id, userId } });
+      if (project && project.isCompleted) {
+        throw new BadRequestException('No se pueden crear tareas en un proyecto completado');
+      }
+    }
 
     const lastTask = await this.taskRepo.findOne({
       where: { user_id:userId, isCompleted: false },

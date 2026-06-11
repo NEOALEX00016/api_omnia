@@ -43,6 +43,18 @@ export class LedgerTransaction {
   @Column()
   description: string;
 
+  @Column({ name: 'source_account_name', nullable: true })
+  sourceAccountName: string;
+
+  @Column({ name: 'payment_group_id', type: 'uuid', nullable: true })
+  paymentGroupId: string;
+
+  @Column({ name: 'reversal_of_group_id', type: 'uuid', nullable: true })
+  reversalOfGroupId: string;
+
+  @Column({ name: 'reversed_at', type: 'timestamp', nullable: true })
+  reversedAt: Date;
+
   @Column({ type: 'varchar', length: 20 })
   context: ProjectContext;
 

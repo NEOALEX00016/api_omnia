@@ -1,4 +1,4 @@
-import { Controller, Get, Put, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Body, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpgradePlanDto, UpdateUserConfigDto } from './dto/user.dto';
@@ -39,5 +39,11 @@ export class UsersController {
   @ApiOperation({ summary: 'Actualizar configuración' })
   updateConfig(@Request() req: any, @Body() data: UpdateUserConfigDto) {
     return this.usersService.updateConfig(req.user.id, data);
+  }
+
+  @Post('reset')
+  @ApiOperation({ summary: 'Eliminar todos los datos del usuario (factory reset)' })
+  resetAllData(@Request() req: any) {
+    return this.usersService.resetAllData(req.user.id);
   }
 }

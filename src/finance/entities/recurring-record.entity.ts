@@ -19,6 +19,9 @@ export class RecurringRecord {
   @Column({ name: 'project_id', nullable: true })
   project_id: string;
 
+  @Column({ name: 'account_id', nullable: true })
+  account_id: string;
+
   @Column()
   type: 'INCOME' | 'EXPENSE';
 
