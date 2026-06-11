@@ -1015,10 +1015,10 @@ export class AccountsService {
       [loanId],
     );
     const expensePayments = await this.dataSource.query(
-      `SELECT e.id, e.date, e.amount, e.description, e.account_id as "accountId", a.name as "accountName"
+      `SELECT e.id, e.date, e.amount, e.description, e.account_id as "accountId", e.payment_group_id as "paymentGroupId", a.name as "accountName"
        FROM omnia.ledger_transactions e
        LEFT JOIN omnia.accounts a ON a.id = e.account_id
-       WHERE e.user_id = $1 AND e.type = 'EXPENSE' AND e.deleted_at IS NULL
+       WHERE e.user_id = $1 AND e.type = 'EXPENSE' AND e.reversed_at IS NULL AND e.deleted_at IS NULL
        ORDER BY e.date ASC, e.created_at ASC`,
       [userId],
     );
@@ -1041,23 +1041,34 @@ export class AccountsService {
         const match = description.match(/desde\s+(.+)$/);
         return match ? match[1].trim() : null;
       })();
-      const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
-      const paymentDate = toDateKey(p.date);
       const amount = Number(p.amount);
-      const pairedExpense = expensePayments.find((e: any) => (
-        e.accountId !== loanId &&
-        toDateKey(e.date) === paymentDate &&
-        Math.abs(Number(e.amount) - amount) < 0.01 &&
-        ((e.description ?? '').trim() === baseDescription || (e.description ?? '').trim() === description.trim())
-      ));
-      const actualPaidAmount = expensePayments
-        .filter((e: any) => {
-          if (e.accountId === loanId) return false;
-          if (toDateKey(e.date) !== paymentDate) return false;
-          const expenseDesc = (e.description ?? '').trim();
-          return expenseDesc === baseDescription || expenseDesc === `${baseDescription} - interés` || expenseDesc === `${baseDescription} - mora`;
-        })
-        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+      const pgId = p.paymentGroupId;
+      const actualPaidAmount = pgId
+        ? expensePayments
+            .filter((e: any) => e.paymentGroupId === pgId)
+            .reduce((sum: number, e: any) => sum + Number(e.amount), 0)
+        : (() => {
+            // Fallback for legacy entries without paymentGroupId
+            const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
+            const paymentDate = toDateKey(p.date);
+            return expensePayments
+              .filter((e: any) => {
+                if (e.accountId === loanId) return false;
+                if (toDateKey(e.date) !== paymentDate) return false;
+                const expenseDesc = (e.description ?? '').trim();
+                return expenseDesc === baseDescription || expenseDesc === `${baseDescription} - interés` || expenseDesc === `${baseDescription} - mora`;
+              })
+              .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
+          })();
+      const pairedExpense = expensePayments.find((e: any) => {
+        if (pgId) return e.paymentGroupId === pgId;
+        const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
+        const paymentDate = toDateKey(p.date);
+        return e.accountId !== loanId &&
+          toDateKey(e.date) === paymentDate &&
+          Math.abs(Number(e.amount) - amount) < 0.01 &&
+          ((e.description ?? '').trim() === baseDescription || (e.description ?? '').trim() === description.trim());
+      });
 
       return {
         paymentNumber: paymentNumberMap.get(p.id) ?? 0,
