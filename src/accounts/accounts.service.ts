@@ -1043,6 +1043,7 @@ export class AccountsService {
       })();
       const amount = Number(p.amount);
       const pgId = p.paymentGroupId;
+      console.log(`[Amort] Payment ${p.id?.substring(0,8)} pgId=${pgId} amount=${amount}`);
       const actualPaidAmount = pgId
         ? expensePayments
             .filter((e: any) => e.paymentGroupId === pgId)
