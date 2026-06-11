@@ -920,7 +920,6 @@ export class AccountsService {
       }
 
       const entry = paymentEntries.find((e: any) => e.paymentNumber === paymentNumber);
-      console.log(`[Amort] Row #${paymentNumber} entry:`, entry ? { pn: entry.paymentNumber, paid: entry.paidAmount, amount: entry.amount } : 'NONE');
       const paidDate = entry
         ? (entry.date instanceof Date ? entry.date.toISOString().substring(0, 10) : String(entry.date))
         : null;
@@ -931,8 +930,6 @@ export class AccountsService {
       const isPaid = paidAmount > 0 && !isPartial;
       const extraPrincipal = Math.max(0, paidPrincipal - scheduledPrincipal);
       const remainingDue = Math.max(0, scheduledPayment - paidAmount);
-
-      console.log(`[Amort] Row #${paymentNumber} scheduled=${round(scheduledPayment)} paid=${paidAmount} isPaid=${isPaid} isPartial=${isPartial}`);
 
       if (isPaid) paidCount++;
 
@@ -999,7 +996,6 @@ export class AccountsService {
        ORDER BY date ASC, created_at ASC`,
       [loanId],
     );
-    console.log(`[Amort] allIncomeEntries count: ${allIncomeEntries.length}`, allIncomeEntries.map((e: any) => ({ id: e.id?.substring(0,8), amount: Number(e.amount), reversedAt: e.reversedAt })));
     const paymentNumberMap = new Map<string, number>();
     let counter = 1;
     for (const e of allIncomeEntries) {
@@ -1043,7 +1039,6 @@ export class AccountsService {
       })();
       const amount = Number(p.amount);
       const pgId = p.paymentGroupId;
-      console.log(`[Amort] Payment ${p.id?.substring(0,8)} pgId=${pgId} amount=${amount}`);
       const actualPaidAmount = pgId
         ? expensePayments
             .filter((e: any) => e.paymentGroupId === pgId)
@@ -1081,8 +1076,6 @@ export class AccountsService {
         sourceAccountName: p.sourceAccountName ?? fromDescription ?? pairedExpense?.accountName ?? null,
       };
     });
-
-    console.log(`[Amort] paymentEntries count: ${paymentEntries.length}`, paymentEntries.map((e: any) => ({ pn: e.paymentNumber, paid: e.paidAmount, desc: e.description?.substring(0,30) })));
 
     // Calculate next due date
     const nextDueDate = this.calculateNextDueDate(loan);
