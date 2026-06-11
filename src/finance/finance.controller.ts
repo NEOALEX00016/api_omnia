@@ -50,6 +50,7 @@ export class FinanceController {
     @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('accountId') accountId?: string,
   ) {
     return this.financeService.findAllLedger(
       req.user.id,
@@ -57,6 +58,7 @@ export class FinanceController {
       to,
       Number(page || '1'),
       Number(limit || '50'),
+      accountId,
     );
   }
 

@@ -49,7 +49,7 @@ export class FinanceService {
     );
   }
 
-  private buildLedgerBaseQuery(userId: string, from?: string, to?: string) {
+  private buildLedgerBaseQuery(userId: string, from?: string, to?: string, accountId?: string) {
     const qb = this.ledgerRepo
       .createQueryBuilder('t')
       .leftJoinAndSelect('t.account', 'account')
@@ -63,6 +63,10 @@ export class FinanceService {
 
     if (to) {
       qb.andWhere('t.date <= :to', { to });
+    }
+
+    if (accountId) {
+      qb.andWhere('t.accountId = :accountId', { accountId });
     }
 
     return qb;
@@ -355,11 +359,13 @@ export class FinanceService {
     return saved;
   }
 
-  async findAllLedger(userId: string, from?: string, to?: string, page = 1, limit = 50) {
+  async findAllLedger(userId: string, from?: string, to?: string, page = 1, limit = 50, accountId?: string) {
     await this.ensureLedgerColumns();
     const safePage = Number.isFinite(page) && page > 0 ? page : 1;
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 50;
-    const qb = this.buildLedgerBaseQuery(userId, from, to).orderBy('t.date', 'DESC');
+    const qb = this.buildLedgerBaseQuery(userId, from, to, accountId)
+      .orderBy('t.date', 'DESC')
+      .addOrderBy('t.createdAt', 'DESC');
 
     qb.skip((safePage - 1) * safeLimit).take(safeLimit);
 
