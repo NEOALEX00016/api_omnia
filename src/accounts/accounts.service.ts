@@ -861,7 +861,7 @@ export class AccountsService {
     monthlyRate: number,
     termMonths: number,
     method: 'FRENCH' | 'GERMAN' | 'AMERICAN',
-    paymentEntries: Array<{ date: Date; amount: number; description: string; paidAmount?: number; paymentGroupId?: string | null; sourceAccountName?: string | null }> = [],
+    paymentEntryMap: Map<number, any> = new Map(),
     nextDueDate: string | null = null,
     loan?: Account,
   ) {
@@ -919,7 +919,7 @@ export class AccountsService {
         dueDate = due.toISOString().substring(0, 10);
       }
 
-      const entry = paymentEntries[paymentNumber - 1];
+      const entry = paymentEntryMap.get(paymentNumber);
       const paidDate = entry
         ? (entry.date instanceof Date ? entry.date.toISOString().substring(0, 10) : String(entry.date))
         : null;
@@ -988,9 +988,9 @@ export class AccountsService {
     const termMonths = this.resolveLoanTermMonths(loan);
     const selectedMethod = this.resolveAmortizationMethod(loan, method);
 
-    // Query payment history for this loan
-    const payments = await this.ledgerRepo.find({
-      where: { accountId: loanId, type: 'INCOME', reversedAt: null } as any,
+    // Query ALL payment history (including reversed) to assign correct payment numbers
+    const allPayments = await this.ledgerRepo.find({
+      where: { accountId: loanId, type: 'INCOME' } as any,
       order: { date: 'ASC' },
     });
     const expensePayments = await this.ledgerRepo.find({
@@ -998,16 +998,14 @@ export class AccountsService {
       relations: ['account'],
       order: { date: 'ASC' },
     });
-    const toDateKey = (date: Date) => date instanceof Date ? date.toISOString().substring(0, 10) : String(date);
-    const paymentEntries: Array<{
-      date: Date;
-      amount: number;
-      description: string;
-      paidAmount: number;
-      paymentGroupId: string | null;
-      reversedAt: Date | null;
-      sourceAccountName: string | null;
-    }> = payments.map((p) => {
+    const toDateKey = (date: any) => date instanceof Date ? date.toISOString().substring(0, 10) : String(date ?? '');
+
+    // Assign paymentNumber sequentially across all entries, then filter reversed
+    const paymentEntryMap = new Map<number, any>();
+    let counter = 0;
+    for (const p of allPayments) {
+      counter++;
+      if (p.reversedAt) continue; // skip reversed
       const description = p.description ?? '';
       const fromDescription = (() => {
         const match = description.match(/desde\s+(.+)$/);
@@ -1016,12 +1014,6 @@ export class AccountsService {
       const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
       const paymentDate = toDateKey(p.date);
       const amount = Number(p.amount);
-      const pairedExpense = expensePayments.find((e) => (
-        e.accountId !== loanId &&
-        toDateKey(e.date) === paymentDate &&
-        Math.abs(Number(e.amount) - amount) < 0.01 &&
-        ((e.description ?? '').trim() === baseDescription || (e.description ?? '').trim() === description.trim())
-      ));
       const actualPaidAmount = expensePayments
         .filter((e) => {
           if (e.accountId === loanId) return false;
@@ -1031,23 +1023,23 @@ export class AccountsService {
         })
         .reduce((sum, e) => sum + Number(e.amount), 0);
 
-      return {
+      paymentEntryMap.set(counter, {
         date: p.date,
         amount,
         description,
         paidAmount: actualPaidAmount > 0 ? actualPaidAmount : amount,
         paymentGroupId: p.paymentGroupId ?? null,
         reversedAt: p.reversedAt ?? null,
-        sourceAccountName: p.sourceAccountName ?? fromDescription ?? pairedExpense?.account?.name ?? null,
-      };
-    });
+        sourceAccountName: p.sourceAccountName ?? fromDescription ?? null,
+      });
+    }
 
     // Calculate next due date
     const nextDueDate = this.calculateNextDueDate(loan);
 
     return this.buildAmortizationSchedule(
       initialPrincipal, remaining, monthlyRate, termMonths, selectedMethod,
-      paymentEntries, nextDueDate, loan,
+      paymentEntryMap, nextDueDate, loan,
     );
   }
 
