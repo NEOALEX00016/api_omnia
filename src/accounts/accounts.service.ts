@@ -861,7 +861,7 @@ export class AccountsService {
     monthlyRate: number,
     termMonths: number,
     method: 'FRENCH' | 'GERMAN' | 'AMERICAN',
-    paymentEntryMap: Map<number, any> = new Map(),
+    paymentEntries: Array<{ paymentNumber: number; date: Date; amount: number; description: string; paidAmount?: number; paymentGroupId?: string | null; sourceAccountName?: string | null }> = [],
     nextDueDate: string | null = null,
     loan?: Account,
   ) {
@@ -919,7 +919,7 @@ export class AccountsService {
         dueDate = due.toISOString().substring(0, 10);
       }
 
-      const entry = paymentEntryMap.get(paymentNumber);
+      const entry = paymentEntries.find((e: any) => e.paymentNumber === paymentNumber);
       const paidDate = entry
         ? (entry.date instanceof Date ? entry.date.toISOString().substring(0, 10) : String(entry.date))
         : null;
@@ -1000,12 +1000,21 @@ export class AccountsService {
     });
     const toDateKey = (date: any) => date instanceof Date ? date.toISOString().substring(0, 10) : String(date ?? '');
 
-    // Assign paymentNumber sequentially across all entries, then filter reversed
-    const paymentEntryMap = new Map<number, any>();
+    // Assign paymentNumber sequentially across ALL entries, then filter reversed
+    const paymentEntries: Array<{
+      paymentNumber: number;
+      date: Date;
+      amount: number;
+      description: string;
+      paidAmount: number;
+      paymentGroupId: string | null;
+      reversedAt: Date | null;
+      sourceAccountName: string | null;
+    }> = [];
     let counter = 0;
     for (const p of allPayments) {
       counter++;
-      if (p.reversedAt) continue; // skip reversed
+      if (p.reversedAt) continue;
       const description = p.description ?? '';
       const fromDescription = (() => {
         const match = description.match(/desde\s+(.+)$/);
@@ -1023,7 +1032,8 @@ export class AccountsService {
         })
         .reduce((sum, e) => sum + Number(e.amount), 0);
 
-      paymentEntryMap.set(counter, {
+      paymentEntries.push({
+        paymentNumber: counter,
         date: p.date,
         amount,
         description,
@@ -1039,7 +1049,7 @@ export class AccountsService {
 
     return this.buildAmortizationSchedule(
       initialPrincipal, remaining, monthlyRate, termMonths, selectedMethod,
-      paymentEntryMap, nextDueDate, loan,
+      paymentEntries, nextDueDate, loan,
     );
   }
 
