@@ -988,28 +988,41 @@ export class AccountsService {
     const termMonths = this.resolveLoanTermMonths(loan);
     const selectedMethod = this.resolveAmortizationMethod(loan, method);
 
-    // Get ALL income entries (including reversed) just to compute payment numbers
-    const allIncomeEntries = await this.ledgerRepo.find({
-      where: { accountId: loanId, type: 'INCOME' } as any,
-      order: { date: 'ASC' },
-    });
+    // Use raw SQL to avoid TypeORM relation mapping issues with accountId
+    const allIncomeEntries = await this.dataSource.query(
+      `SELECT id, date, amount, description, payment_group_id as "paymentGroupId", source_account_name as "sourceAccountName", reversed_at as "reversedAt"
+       FROM omnia.ledger_transactions
+       WHERE account_id = $1 AND type = 'INCOME' AND deleted_at IS NULL
+       ORDER BY date ASC, created_at ASC`,
+      [loanId],
+    );
     const paymentNumberMap = new Map<string, number>();
     let counter = 1;
     for (const e of allIncomeEntries) {
       paymentNumberMap.set(e.id, counter++);
     }
 
-    // Query only NON-REVERSED payment history (original logic)
-    const payments = await this.ledgerRepo.find({
-      where: { accountId: loanId, type: 'INCOME', reversedAt: null } as any,
-      order: { date: 'ASC' },
-    });
-    const expensePayments = await this.ledgerRepo.find({
-      where: { user_id: userId, type: 'EXPENSE' } as any,
-      relations: ['account'],
-      order: { date: 'ASC' },
-    });
-    const toDateKey = (date: any) => date instanceof Date ? date.toISOString().substring(0, 10) : String(date ?? '');
+    // Query only NON-REVERSED payment history
+    const payments = await this.dataSource.query(
+      `SELECT id, date, amount, description, payment_group_id as "paymentGroupId", source_account_name as "sourceAccountName"
+       FROM omnia.ledger_transactions
+       WHERE account_id = $1 AND type = 'INCOME' AND reversed_at IS NULL AND deleted_at IS NULL
+       ORDER BY date ASC, created_at ASC`,
+      [loanId],
+    );
+    const expensePayments = await this.dataSource.query(
+      `SELECT e.id, e.date, e.amount, e.description, e.account_id as "accountId", a.name as "accountName"
+       FROM omnia.ledger_transactions e
+       LEFT JOIN omnia.accounts a ON a.id = e.account_id
+       WHERE e.user_id = $1 AND e.type = 'EXPENSE' AND e.deleted_at IS NULL
+       ORDER BY e.date ASC, e.created_at ASC`,
+      [userId],
+    );
+    const toDateKey = (date: any) => {
+      if (!date) return '';
+      const d = typeof date === 'string' ? date : (date instanceof Date ? date.toISOString().substring(0, 10) : String(date));
+      return typeof d === 'string' ? d.substring(0, 10) : String(d);
+    };
     const paymentEntries: Array<{
       paymentNumber: number;
       date: Date;
@@ -1018,8 +1031,8 @@ export class AccountsService {
       paidAmount?: number;
       paymentGroupId?: string | null;
       sourceAccountName?: string | null;
-    }> = payments.map((p) => {
-      const description = p.description ?? '';
+    }> = payments.map((p: any) => {
+      const description = (p.description ?? '') as string;
       const fromDescription = (() => {
         const match = description.match(/desde\s+(.+)$/);
         return match ? match[1].trim() : null;
@@ -1027,29 +1040,29 @@ export class AccountsService {
       const baseDescription = description.replace(/\s+·\s+desde\s+.+$/, '').trim();
       const paymentDate = toDateKey(p.date);
       const amount = Number(p.amount);
-      const pairedExpense = expensePayments.find((e) => (
+      const pairedExpense = expensePayments.find((e: any) => (
         e.accountId !== loanId &&
         toDateKey(e.date) === paymentDate &&
         Math.abs(Number(e.amount) - amount) < 0.01 &&
         ((e.description ?? '').trim() === baseDescription || (e.description ?? '').trim() === description.trim())
       ));
       const actualPaidAmount = expensePayments
-        .filter((e) => {
+        .filter((e: any) => {
           if (e.accountId === loanId) return false;
           if (toDateKey(e.date) !== paymentDate) return false;
           const expenseDesc = (e.description ?? '').trim();
           return expenseDesc === baseDescription || expenseDesc === `${baseDescription} - interés` || expenseDesc === `${baseDescription} - mora`;
         })
-        .reduce((sum, e) => sum + Number(e.amount), 0);
+        .reduce((sum: number, e: any) => sum + Number(e.amount), 0);
 
       return {
-        paymentNumber: paymentNumberMap.get(p.id) ?? payments.indexOf(p) + 1,
+        paymentNumber: paymentNumberMap.get(p.id) ?? 0,
         date: p.date,
         amount,
         description,
         paidAmount: actualPaidAmount > 0 ? actualPaidAmount : amount,
         paymentGroupId: p.paymentGroupId ?? null,
-        sourceAccountName: p.sourceAccountName ?? fromDescription ?? pairedExpense?.account?.name ?? null,
+        sourceAccountName: p.sourceAccountName ?? fromDescription ?? pairedExpense?.accountName ?? null,
       };
     });
 
