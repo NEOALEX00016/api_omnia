@@ -88,6 +88,14 @@ export class CreateAccountDto {
   @IsNumber()
   @IsOptional()
   paymentDueDay?: number;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  firstPaymentDate?: string;
 }
 
 export class UpdateAccountDto {
@@ -184,6 +192,14 @@ export class UpdateAccountDto {
   @IsNumber()
   @IsOptional()
   paymentDueDay?: number;
+
+  @IsString()
+  @IsOptional()
+  startDate?: string;
+
+  @IsString()
+  @IsOptional()
+  firstPaymentDate?: string;
 }
 
 export class CreateTransferDto {

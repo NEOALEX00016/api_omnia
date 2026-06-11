@@ -169,6 +169,8 @@ export class AccountsService {
     await this.dataSource.query('ALTER TABLE omnia.accounts ADD COLUMN IF NOT EXISTS statement_closing_day INTEGER');
     await this.dataSource.query('ALTER TABLE omnia.accounts ADD COLUMN IF NOT EXISTS payment_due_day INTEGER');
     await this.dataSource.query("ALTER TABLE omnia.accounts ADD COLUMN IF NOT EXISTS interest_period VARCHAR(10) DEFAULT 'ANNUAL'");
+    await this.dataSource.query('ALTER TABLE omnia.accounts ADD COLUMN IF NOT EXISTS start_date DATE');
+    await this.dataSource.query('ALTER TABLE omnia.accounts ADD COLUMN IF NOT EXISTS first_payment_date DATE');
   }
 
   private async ensureRecurringAccountColumns() {
@@ -283,6 +285,8 @@ export class AccountsService {
       lateFeePercent: dto.lateFeePercent,
       statementClosingDay: dto.statementClosingDay,
       paymentDueDay: dto.paymentDueDay,
+      startDate: dto.startDate ? new Date(dto.startDate) : null,
+      firstPaymentDate: dto.firstPaymentDate ? new Date(dto.firstPaymentDate) : null,
     });
     const saved = await this.accountRepo.save(account);
     await this.syncRecurringTemplateForAccount(saved, userId);
@@ -861,6 +865,7 @@ export class AccountsService {
     method: 'FRENCH' | 'GERMAN' | 'AMERICAN',
     paymentEntries: Array<{ date: Date; amount: number; description: string; paidAmount?: number; paymentGroupId?: string | null; sourceAccountName?: string | null }> = [],
     nextDueDate: string | null = null,
+    loan?: Account,
   ) {
     const round = (value: number) => Math.round(value * 100) / 100;
     const schedule = [];
@@ -877,6 +882,10 @@ export class AccountsService {
         },
       };
     }
+
+    // Compute origin date for generating due dates
+    const paymentDay = loan?.paymentDay ?? 15;
+    const originDate = loan?.firstPaymentDate || loan?.startDate || null;
 
     let paidCount = 0;
     for (let paymentNumber = 1; paymentNumber <= termMonths && balance > 0.01; paymentNumber++) {
@@ -904,6 +913,14 @@ export class AccountsService {
       }
       if (installment === 0) installment = scheduledPayment;
 
+      // Compute due date for this row
+      let dueDate: string | null = null;
+      if (originDate) {
+        const origin = new Date(originDate);
+        const due = new Date(origin.getFullYear(), origin.getMonth() + paymentNumber, paymentDay);
+        dueDate = due.toISOString().substring(0, 10);
+      }
+
       const entry = paymentEntries[paymentNumber - 1];
       const paidDate = entry
         ? (entry.date instanceof Date ? entry.date.toISOString().substring(0, 10) : String(entry.date))
@@ -930,6 +947,7 @@ export class AccountsService {
         balance: round(balance),
         isPaid,
         isPartial,
+        dueDate,
         paidDate,
         paidAmount,
         paidPrincipal,
@@ -1031,7 +1049,7 @@ export class AccountsService {
 
     return this.buildAmortizationSchedule(
       initialPrincipal, remaining, monthlyRate, termMonths, selectedMethod,
-      paymentEntries, nextDueDate,
+      paymentEntries, nextDueDate, loan,
     );
   }
 
@@ -1039,10 +1057,21 @@ export class AccountsService {
     const paymentDay = loan.paymentDay ?? 0;
     if (paymentDay <= 0 || paymentDay > 28) return null;
 
+    const paidCount = this.countPaidPayments(loan);
+    const originDate = loan.firstPaymentDate || loan.startDate || loan.createdAt;
+
+    if (originDate && paidCount === 0) {
+      if (loan.firstPaymentDate) {
+        return new Date(loan.firstPaymentDate).toISOString().substring(0, 10);
+      }
+      const origin = new Date(originDate);
+      const first = new Date(origin.getFullYear(), origin.getMonth() + 1, paymentDay);
+      return first.toISOString().substring(0, 10);
+    }
+
     const now = new Date();
     const today = now.getDate();
 
-    // Determine the next occurrence of paymentDay
     let next: Date;
     if (today < paymentDay) {
       next = new Date(now.getFullYear(), now.getMonth(), paymentDay);
@@ -1050,18 +1079,13 @@ export class AccountsService {
       next = new Date(now.getFullYear(), now.getMonth() + 1, paymentDay);
     }
 
-    // If loan has a creation date, ensure the due date is after the first payment
-    const paidCount = this.countPaidPayments(loan);
-    if (loan.createdAt && paidCount > 0) {
-      const created = new Date(loan.createdAt);
-      // Advance from creation date by (paidCount + 1) months
-      const projected = new Date(created.getFullYear(), created.getMonth() + paidCount + 1, paymentDay);
-      if (projected > next) {
-        next = projected;
-      }
+    if (originDate && paidCount > 0) {
+      const origin = new Date(originDate);
+      const projected = new Date(origin.getFullYear(), origin.getMonth() + paidCount + 1, paymentDay);
+      if (projected > next) next = projected;
     }
 
-    return next.toISOString().substring(0, 10); // YYYY-MM-DD
+    return next.toISOString().substring(0, 10);
   }
 
   private countPaidPayments(loan: Account): number {

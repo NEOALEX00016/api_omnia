@@ -91,6 +91,12 @@ export class Account {
   @Column({ name: 'payment_due_day', nullable: true })
   paymentDueDay: number;
 
+  @Column({ name: 'start_date', type: 'date', nullable: true })
+  startDate: Date;
+
+  @Column({ name: 'first_payment_date', type: 'date', nullable: true })
+  firstPaymentDate: Date;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
