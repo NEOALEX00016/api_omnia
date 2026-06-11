@@ -861,7 +861,7 @@ export class AccountsService {
     monthlyRate: number,
     termMonths: number,
     method: 'FRENCH' | 'GERMAN' | 'AMERICAN',
-    paymentEntries: Array<{ paymentNumber: number; date: Date; amount: number; description: string; paidAmount?: number; paymentGroupId?: string | null; sourceAccountName?: string | null }> = [],
+    paymentEntries: Array<{ date: Date; amount: number; description: string; paidAmount?: number; paymentGroupId?: string | null; sourceAccountName?: string | null }> = [],
     nextDueDate: string | null = null,
     loan?: Account,
   ) {
@@ -886,6 +886,7 @@ export class AccountsService {
     const originDate = loan?.firstPaymentDate || loan?.startDate || null;
 
     let paidCount = 0;
+    let paymentIdx = 0;
     for (let paymentNumber = 1; paymentNumber <= termMonths && balance > 0.01; paymentNumber++) {
       const remainingPeriods = termMonths - paymentNumber + 1;
       const interest = balance * monthlyRate;
@@ -919,7 +920,7 @@ export class AccountsService {
         dueDate = due.toISOString().substring(0, 10);
       }
 
-      const entry = paymentEntries.find((e: any) => e.paymentNumber === paymentNumber);
+      const entry = paymentIdx < paymentEntries.length ? paymentEntries[paymentIdx] : undefined;
       const paidDate = entry
         ? (entry.date instanceof Date ? entry.date.toISOString().substring(0, 10) : String(entry.date))
         : null;
@@ -932,6 +933,7 @@ export class AccountsService {
       const remainingDue = Math.max(0, scheduledPayment - paidAmount);
 
       if (isPaid) paidCount++;
+      if (isPaid || isPartial) paymentIdx++;
 
       const principalToApply = entry ? paidPrincipal : scheduledPrincipal;
       balance = Math.max(0, balance - principalToApply);
@@ -988,20 +990,7 @@ export class AccountsService {
     const termMonths = this.resolveLoanTermMonths(loan);
     const selectedMethod = this.resolveAmortizationMethod(loan, method);
 
-    // Use raw SQL to avoid TypeORM relation mapping issues with accountId
-    const allIncomeEntries = await this.dataSource.query(
-      `SELECT id, date, amount, description, payment_group_id as "paymentGroupId", source_account_name as "sourceAccountName", reversed_at as "reversedAt"
-       FROM omnia.ledger_transactions
-       WHERE account_id = $1 AND type = 'INCOME' AND deleted_at IS NULL
-       ORDER BY date ASC, created_at ASC`,
-      [loanId],
-    );
-    const paymentNumberMap = new Map<string, number>();
-    let counter = 1;
-    for (const e of allIncomeEntries) {
-      paymentNumberMap.set(e.id, counter++);
-    }
-
+    // Use raw SQL to avoid TypeORM relation mapping issues
     // Query only NON-REVERSED payment history
     const payments = await this.dataSource.query(
       `SELECT id, date, amount, description, payment_group_id as "paymentGroupId", source_account_name as "sourceAccountName"
@@ -1024,7 +1013,6 @@ export class AccountsService {
       return typeof d === 'string' ? d.substring(0, 10) : String(d);
     };
     const paymentEntries: Array<{
-      paymentNumber: number;
       date: Date;
       amount: number;
       description: string;
@@ -1067,7 +1055,6 @@ export class AccountsService {
       });
 
       return {
-        paymentNumber: paymentNumberMap.get(p.id) ?? 0,
         date: p.date,
         amount,
         description,
