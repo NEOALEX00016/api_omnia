@@ -163,9 +163,9 @@ export class TasksService implements OnApplicationBootstrap {
     task.isCompleted = true;
     task.completedAt = new Date();
     
-    // Usar tiempo real si viene del timer, si no usar estimado
+    // Usar tiempo real si viene del timer (ya viene en minutos), si no usar estimado
     if (dto.actualDuration) {
-      task.actualMins = Math.ceil(dto.actualDuration / 60);
+      task.actualMins = Math.max(1, Math.round(dto.actualDuration));
     } else {
       task.actualMins = task.estimatedMins;
     }
