@@ -45,6 +45,22 @@ export class TasksService implements OnApplicationBootstrap {
       }
     }
 
+    if (dto.startTime && dto.dueDate) {
+      const conflict = await this.taskRepo.findOne({
+        where: {
+          user_id: userId,
+          startTime: dto.startTime,
+          dueDate: new Date(dto.dueDate),
+          isCompleted: false,
+        },
+      });
+      if (conflict) {
+        throw new BadRequestException(
+          `Ya tienes la tarea "${conflict.title}" a las ${dto.startTime} ese día`
+        );
+      }
+    }
+
     const lastTask = await this.taskRepo.findOne({
       where: { user_id:userId, isCompleted: false },
       order: { positionIndex: 'DESC' },
@@ -110,7 +126,7 @@ export class TasksService implements OnApplicationBootstrap {
       });
     }
     
-    // CASCADA DE TIEMPO: Recalcular start_time de todas las siguientes
+    // Cascada de tiempo: recalcular horarios según el nuevo orden
     await this.recalculateTimeCascade(userId);
     
     return { message: 'Tareas reordenadas', cascadeApplied: true };
@@ -195,7 +211,7 @@ export class TasksService implements OnApplicationBootstrap {
     // Ordenar por score descendente
     tasks.sort((a, b) => (b.omniaScore || 0) - (a.omniaScore || 0));
     
-    // Reasignar positions
+    // Reasignar positions + cascade de tiempo
     const taskIds = tasks.map(t => t.id);
     return this.reorder(userId, taskIds);
   }
