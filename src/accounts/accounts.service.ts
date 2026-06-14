@@ -391,15 +391,15 @@ export class AccountsService {
     const account = await this.accountRepo.findOne({ where: { id: accountId } });
     if (!account) return;
 
-    if (type === 'INCOME') {
-      account.balance += amount;
-    } else {
-      account.balance -= amount;
-      if (account.type === 'LOAN' && account.remainingBalance != null) {
-        account.remainingBalance -= amount;
-        if (account.remainingBalance < 0) account.remainingBalance = 0;
-      }
+    const currentBalance = Number(account.balance);
+    const newBalance = type === 'INCOME' ? currentBalance + amount : currentBalance - amount;
+    account.balance = newBalance;
+
+    if (type === 'EXPENSE' && account.type === 'LOAN' && account.remainingBalance != null) {
+      const currentRemaining = Number(account.remainingBalance);
+      account.remainingBalance = Math.max(0, currentRemaining - amount);
     }
+
     await this.accountRepo.save(account);
   }
 
